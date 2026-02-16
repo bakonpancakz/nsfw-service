@@ -4,23 +4,24 @@
 
 [ Usage ]
 
-Send a HTTP Request to Port 9000 with the request body as your image.
-This service supports the following codecs WEBP, PNG, GIF, and JPEG.
-Animated images are not supported, GIFs will only use the first frame.
+Send an HTTP POST request to port 9000 with the request body containing raw image data.
 
-- Example Response Status -
+Supported formats: WEBP, PNG, GIF, JPEG.
 
-500 : Server Error, parse body as plaintext for error message
-200 : Image Classified, parse body as JSON string for results
+Animated images are not supported. For GIFs, only the first frame is used.
 
-400: Invalid Image Data
-405 : Method Not Allowed, send a request with the POST method 
-411 : Failed to read Request Body
-413 : Request body is too large, keep it under 16MB
-415 : Unsupported Image Type 
-422 : Invalid Image Dimensions ( >2048px / <32px )
+--- Response Status Codes ---
 
-- Example Response Body -
+200 – Image classified, response body is JSON
+400 – Invalid image data
+405 – Method not allowed (use POST)
+411 – Failed to read request body
+413 – Request body too large (max 16 MB)
+415 – Unsupported image type
+422 – Invalid image dimensions (>2048px or <32px)
+500 – Server error, response body is plaintext
+
+--- Example Response Body ---
 
 {
    "allowed":true,
@@ -38,9 +39,19 @@ Animated images are not supported, GIFs will only use the first frame.
    "timings":{
       "classify":16636400,
       "decode":4752600,
-      "probe":7965500
+      "probe": 7965500,
+      "total": 29354500
    }
 }
+
+[ Hosting ]
+
+This service is intended to run in a Docker container on Debian 13.
+
+A public instance is available at: https://nsfw.panca.kz
+
+Please do not abuse it. Uptime is best-effort only. If this service is mission
+critical, you should host your own instance.
 
 [ Credits ]
 
