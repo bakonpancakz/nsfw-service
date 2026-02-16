@@ -83,6 +83,11 @@ func StartupHTTP(stop context.Context, await *sync.WaitGroup) {
 		var elapsedProbe, elapsedDecode, elapsedClassify int64
 		t := time.Now()
 
+		if r.Method == http.MethodGet && r.URL.Path == "/" {
+			http.Error(w, "nsfw-service", http.StatusOK)
+			return
+		}
+
 		// Request Validation
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
