@@ -189,6 +189,9 @@ func StartupHTTP(stop context.Context, await *sync.WaitGroup) {
 		elapsedClassify = time.Since(t).Nanoseconds()
 		t = time.Now()
 
+		// Output Results
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+
 		enc := json.NewEncoder(w)
 		enc.SetEscapeHTML(false)
 		enc.Encode(map[string]any{
