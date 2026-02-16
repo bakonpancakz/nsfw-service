@@ -3,7 +3,10 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/md5"
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 	"image"
 	"image/gif"
 	"image/jpeg"
@@ -208,8 +211,10 @@ func StartupHTTP(stop context.Context, await *sync.WaitGroup) {
 				"total":    elapsedProbe + elapsedDecode + elapsedClassify,
 			},
 			"image": map[string]any{
-				"height": imageInfo.Height,
-				"width":  imageInfo.Width,
+				"hash_sha256": fmt.Sprintf("%x", sha256.Sum256(d)),
+				"hash_md5":    fmt.Sprintf("%x", md5.Sum(d)),
+				"height":      imageInfo.Height,
+				"width":       imageInfo.Width,
 			},
 			"logits": map[string]any{
 				"drawing": results.Drawing,
