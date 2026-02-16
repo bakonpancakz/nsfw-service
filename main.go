@@ -200,6 +200,7 @@ func StartupHTTP(stop context.Context, await *sync.WaitGroup) {
 				"probe":    elapsedProbe,
 				"decode":   elapsedDecode,
 				"classify": elapsedClassify,
+				"total":    elapsedProbe + elapsedDecode + elapsedClassify,
 			},
 			"image": map[string]any{
 				"height": imageInfo.Height,
