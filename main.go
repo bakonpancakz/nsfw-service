@@ -191,18 +191,14 @@ func StartupHTTP(stop context.Context, await *sync.WaitGroup) {
 		// Image Classification
 		results, err := ModelClassifyImage(imageData)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, "Classify Error: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 		elapsedClassify = time.Since(t).Nanoseconds()
 		t = time.Now()
 
 		// Output Results
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-
-		enc := json.NewEncoder(w)
-		enc.SetEscapeHTML(false)
-		enc.Encode(map[string]any{
+		output, err := json.Marshal(map[string]any{
 			"allowed": (results.Hentai + results.Porn + (results.Sexy * 0.9)) < MODEL_TRESHOLD,
 			"timings": map[string]any{
 				"probe":    elapsedProbe,
@@ -224,6 +220,14 @@ func StartupHTTP(stop context.Context, await *sync.WaitGroup) {
 				"sexy":    results.Sexy,
 			},
 		})
+		if err != nil {
+			http.Error(w, "Encoding Error: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.Write(output)
+		os.Stdout.Write(output)
 
 	})
 

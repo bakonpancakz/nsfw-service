@@ -10,8 +10,8 @@ Animated images are not supported, GIFs will only use the first frame.
 
 - Example Response Status -
 
-500 : Tensorflow Error, parse body as plaintext
-200 : Classification OK, parse body as JSON string
+500 : Server Error, parse body as plaintext for error message
+200 : Image Classified, parse body as JSON string for results
 
 400: Invalid Image Data
 405 : Method Not Allowed, send a request with the POST method 
