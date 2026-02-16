@@ -90,7 +90,7 @@ func StartupHTTP(stop context.Context, await *sync.WaitGroup) {
 
 		var d []byte
 		if raw, err := io.ReadAll(r.Body); err != nil {
-			http.Error(w, "Body Error", http.StatusBadRequest)
+			http.Error(w, "Body Error", http.StatusLengthRequired)
 			return
 		} else {
 			d = raw
@@ -135,7 +135,7 @@ func StartupHTTP(stop context.Context, await *sync.WaitGroup) {
 		case IMAGE_GIF:
 			imageInfo, imageErr = gif.DecodeConfig(bytes.NewReader(d))
 		default:
-			http.Error(w, "Unsupported Image Format", http.StatusBadRequest)
+			http.Error(w, "Unsupported Image Format", http.StatusUnsupportedMediaType)
 			return
 		}
 		elapsedProbe = time.Since(t).Nanoseconds()
@@ -146,11 +146,11 @@ func StartupHTTP(stop context.Context, await *sync.WaitGroup) {
 			return
 		}
 		if imageInfo.Height > 2048 || imageInfo.Width > 2048 {
-			http.Error(w, "Image dimension cannot be larger than 2048 pixels", http.StatusBadRequest)
+			http.Error(w, "Image dimension cannot be larger than 2048 pixels", http.StatusUnprocessableEntity)
 			return
 		}
 		if imageInfo.Height < 32 || imageInfo.Width < 32 {
-			http.Error(w, "Image dimension cannot be smaller than 32 pixels", http.StatusBadRequest)
+			http.Error(w, "Image dimension cannot be smaller than 32 pixels", http.StatusUnprocessableEntity)
 			return
 		}
 
@@ -164,7 +164,7 @@ func StartupHTTP(stop context.Context, await *sync.WaitGroup) {
 		case IMAGE_GIF:
 			imageData, imageErr = gif.Decode(bytes.NewReader(d))
 		default:
-			http.Error(w, "Invalid Image Type", http.StatusBadRequest)
+			http.Error(w, "Unsupported Image Format", http.StatusUnsupportedMediaType)
 			return
 		}
 		if imageErr != nil {
