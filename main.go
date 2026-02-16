@@ -86,148 +86,150 @@ func StartupHTTP(stop context.Context, await *sync.WaitGroup) {
 		var elapsedProbe, elapsedDecode, elapsedClassify int64
 		t := time.Now()
 
-		if r.Method == http.MethodGet && r.URL.Path == "/" {
-			http.Error(w, "nsfw-service", http.StatusOK)
-			return
-		}
+		switch r.Method {
 
-		// Request Validation
-		if r.Method != http.MethodPost {
+		case http.MethodPost:
+			// Request Validation
+			if r.ContentLength > HTTP_LENGTH_LIMIT {
+				http.Error(w, "Content Too Large", http.StatusRequestEntityTooLarge)
+				return
+			}
+			r.Body = http.MaxBytesReader(w, r.Body, HTTP_LENGTH_LIMIT)
+
+			var d []byte
+			if raw, err := io.ReadAll(r.Body); err != nil {
+				http.Error(w, "Body Error", http.StatusLengthRequired)
+				return
+			} else {
+				d = raw
+			}
+
+			// Image Validation
+			var imageType ImageType
+			var imageInfo image.Config
+			var imageData image.Image
+			var imageErr error
+
+			switch { // Sniffing
+			case len(d) > 3 && // JPEG
+				d[0] == 0xFF && d[1] == 0xD8 && d[2] == 0xFF:
+				imageType = IMAGE_JPEG
+
+			case len(d) > 8 && // PNG
+				d[0] == 0x89 && d[1] == 0x50 && d[2] == 0x4E && d[3] == 0x47 &&
+				d[4] == 0x0D && d[5] == 0x0A && d[6] == 0x1A && d[7] == 0x0A:
+				imageType = IMAGE_PNG
+
+			case len(d) > 4 && // GIF
+				d[0] == 0x47 && d[1] == 0x49 && d[2] == 0x46 && d[3] == 0x38:
+				imageType = IMAGE_GIF
+
+			case len(d) > 12 && // WEBP
+				d[0] == 0x52 && d[1] == 0x49 && d[2] == 0x46 && d[3] == 0x46 &&
+				d[8] == 0x57 && d[9] == 0x45 && d[10] == 0x42 && d[11] == 0x50:
+				imageType = IMAGE_WEBP
+
+			default:
+				imageType = IMAGE_OTHER
+			}
+
+			switch imageType { // Decode Header
+			case IMAGE_WEBP:
+				imageInfo, imageErr = webp.DecodeConfig(bytes.NewReader(d))
+			case IMAGE_JPEG:
+				imageInfo, imageErr = jpeg.DecodeConfig(bytes.NewReader(d))
+			case IMAGE_PNG:
+				imageInfo, imageErr = png.DecodeConfig(bytes.NewReader(d))
+			case IMAGE_GIF:
+				imageInfo, imageErr = gif.DecodeConfig(bytes.NewReader(d))
+			default:
+				http.Error(w, "Unsupported Image Format", http.StatusUnsupportedMediaType)
+				return
+			}
+			elapsedProbe = time.Since(t).Nanoseconds()
+			t = time.Now()
+
+			if imageErr != nil {
+				http.Error(w, "Invalid Image Data", http.StatusBadRequest)
+				return
+			}
+			if imageInfo.Height > 2048 || imageInfo.Width > 2048 {
+				http.Error(w, "Image dimension cannot be larger than 2048 pixels", http.StatusUnprocessableEntity)
+				return
+			}
+			if imageInfo.Height < 32 || imageInfo.Width < 32 {
+				http.Error(w, "Image dimension cannot be smaller than 32 pixels", http.StatusUnprocessableEntity)
+				return
+			}
+
+			switch imageType { // Decode Pixels
+			case IMAGE_WEBP:
+				imageData, imageErr = webp.Decode(bytes.NewReader(d))
+			case IMAGE_JPEG:
+				imageData, imageErr = jpeg.Decode(bytes.NewReader(d))
+			case IMAGE_PNG:
+				imageData, imageErr = png.Decode(bytes.NewReader(d))
+			case IMAGE_GIF:
+				imageData, imageErr = gif.Decode(bytes.NewReader(d))
+			default:
+				http.Error(w, "Unsupported Image Format", http.StatusUnsupportedMediaType)
+				return
+			}
+			if imageErr != nil {
+				http.Error(w, "Invalid Image Data", http.StatusBadRequest)
+				return
+			}
+			elapsedDecode = time.Since(t).Nanoseconds()
+			t = time.Now()
+
+			// Image Classification
+			results, err := ModelClassifyImage(imageData)
+			if err != nil {
+				http.Error(w, "Classify Error: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+			elapsedClassify = time.Since(t).Nanoseconds()
+			t = time.Now()
+
+			// Output Results
+			output, err := json.Marshal(map[string]any{
+				"allowed": (results.Hentai + results.Porn + (results.Sexy * 0.9)) < MODEL_TRESHOLD,
+				"timings": map[string]any{
+					"probe":    elapsedProbe,
+					"decode":   elapsedDecode,
+					"classify": elapsedClassify,
+					"total":    elapsedProbe + elapsedDecode + elapsedClassify,
+				},
+				"image": map[string]any{
+					"hash_sha256": fmt.Sprintf("%x", sha256.Sum256(d)),
+					"hash_md5":    fmt.Sprintf("%x", md5.Sum(d)),
+					"height":      imageInfo.Height,
+					"width":       imageInfo.Width,
+				},
+				"logits": map[string]any{
+					"drawing": results.Drawing,
+					"hentai":  results.Hentai,
+					"neutral": results.Neutral,
+					"porn":    results.Porn,
+					"sexy":    results.Sexy,
+				},
+			})
+			if err != nil {
+				http.Error(w, "Encoding Error: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+
+			w.Header().Set("Content-Type", "application/json; charset=utf-8")
+			w.Write(output)
+			os.Stdout.Write(output)
+
+		// Other Methods
+		case http.MethodHead, http.MethodGet:
+			http.Error(w, "service-nsfw ; ><> .o( blub blub )", http.StatusOK)
+
+		default:
 			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
-			return
 		}
-		if r.ContentLength > HTTP_LENGTH_LIMIT {
-			http.Error(w, "Content Too Large", http.StatusRequestEntityTooLarge)
-			return
-		}
-		r.Body = http.MaxBytesReader(w, r.Body, HTTP_LENGTH_LIMIT)
-
-		var d []byte
-		if raw, err := io.ReadAll(r.Body); err != nil {
-			http.Error(w, "Body Error", http.StatusLengthRequired)
-			return
-		} else {
-			d = raw
-		}
-
-		// Image Validation
-		var imageType ImageType
-		var imageInfo image.Config
-		var imageData image.Image
-		var imageErr error
-
-		switch { // Sniffing
-		case len(d) > 3 && // JPEG
-			d[0] == 0xFF && d[1] == 0xD8 && d[2] == 0xFF:
-			imageType = IMAGE_JPEG
-
-		case len(d) > 8 && // PNG
-			d[0] == 0x89 && d[1] == 0x50 && d[2] == 0x4E && d[3] == 0x47 &&
-			d[4] == 0x0D && d[5] == 0x0A && d[6] == 0x1A && d[7] == 0x0A:
-			imageType = IMAGE_PNG
-
-		case len(d) > 4 && // GIF
-			d[0] == 0x47 && d[1] == 0x49 && d[2] == 0x46 && d[3] == 0x38:
-			imageType = IMAGE_GIF
-
-		case len(d) > 12 && // WEBP
-			d[0] == 0x52 && d[1] == 0x49 && d[2] == 0x46 && d[3] == 0x46 &&
-			d[8] == 0x57 && d[9] == 0x45 && d[10] == 0x42 && d[11] == 0x50:
-			imageType = IMAGE_WEBP
-
-		default:
-			imageType = IMAGE_OTHER
-		}
-
-		switch imageType { // Decode Header
-		case IMAGE_WEBP:
-			imageInfo, imageErr = webp.DecodeConfig(bytes.NewReader(d))
-		case IMAGE_JPEG:
-			imageInfo, imageErr = jpeg.DecodeConfig(bytes.NewReader(d))
-		case IMAGE_PNG:
-			imageInfo, imageErr = png.DecodeConfig(bytes.NewReader(d))
-		case IMAGE_GIF:
-			imageInfo, imageErr = gif.DecodeConfig(bytes.NewReader(d))
-		default:
-			http.Error(w, "Unsupported Image Format", http.StatusUnsupportedMediaType)
-			return
-		}
-		elapsedProbe = time.Since(t).Nanoseconds()
-		t = time.Now()
-
-		if imageErr != nil {
-			http.Error(w, "Invalid Image Data", http.StatusBadRequest)
-			return
-		}
-		if imageInfo.Height > 2048 || imageInfo.Width > 2048 {
-			http.Error(w, "Image dimension cannot be larger than 2048 pixels", http.StatusUnprocessableEntity)
-			return
-		}
-		if imageInfo.Height < 32 || imageInfo.Width < 32 {
-			http.Error(w, "Image dimension cannot be smaller than 32 pixels", http.StatusUnprocessableEntity)
-			return
-		}
-
-		switch imageType { // Decode Pixels
-		case IMAGE_WEBP:
-			imageData, imageErr = webp.Decode(bytes.NewReader(d))
-		case IMAGE_JPEG:
-			imageData, imageErr = jpeg.Decode(bytes.NewReader(d))
-		case IMAGE_PNG:
-			imageData, imageErr = png.Decode(bytes.NewReader(d))
-		case IMAGE_GIF:
-			imageData, imageErr = gif.Decode(bytes.NewReader(d))
-		default:
-			http.Error(w, "Unsupported Image Format", http.StatusUnsupportedMediaType)
-			return
-		}
-		if imageErr != nil {
-			http.Error(w, "Invalid Image Data", http.StatusBadRequest)
-			return
-		}
-		elapsedDecode = time.Since(t).Nanoseconds()
-		t = time.Now()
-
-		// Image Classification
-		results, err := ModelClassifyImage(imageData)
-		if err != nil {
-			http.Error(w, "Classify Error: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-		elapsedClassify = time.Since(t).Nanoseconds()
-		t = time.Now()
-
-		// Output Results
-		output, err := json.Marshal(map[string]any{
-			"allowed": (results.Hentai + results.Porn + (results.Sexy * 0.9)) < MODEL_TRESHOLD,
-			"timings": map[string]any{
-				"probe":    elapsedProbe,
-				"decode":   elapsedDecode,
-				"classify": elapsedClassify,
-				"total":    elapsedProbe + elapsedDecode + elapsedClassify,
-			},
-			"image": map[string]any{
-				"hash_sha256": fmt.Sprintf("%x", sha256.Sum256(d)),
-				"hash_md5":    fmt.Sprintf("%x", md5.Sum(d)),
-				"height":      imageInfo.Height,
-				"width":       imageInfo.Width,
-			},
-			"logits": map[string]any{
-				"drawing": results.Drawing,
-				"hentai":  results.Hentai,
-				"neutral": results.Neutral,
-				"porn":    results.Porn,
-				"sexy":    results.Sexy,
-			},
-		})
-		if err != nil {
-			http.Error(w, "Encoding Error: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		w.Write(output)
-		os.Stdout.Write(output)
 
 	})
 
