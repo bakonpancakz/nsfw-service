@@ -26,14 +26,15 @@ import (
 type ImageType string
 
 const (
-	IMAGE_OTHER    ImageType = "UNKNOWN"
-	IMAGE_WEBP     ImageType = "WEBP"
-	IMAGE_JPEG     ImageType = "JPG"
-	IMAGE_PNG      ImageType = "PNG"
-	IMAGE_GIF      ImageType = "GIF"
-	HTTP_ADDRESS             = "0.0.0.0:9000"
-	MODEL_TRESHOLD           = 0.7
-	MODEL_SIZE               = 224
+	IMAGE_OTHER       ImageType = "UNKNOWN"
+	IMAGE_WEBP        ImageType = "WEBP"
+	IMAGE_JPEG        ImageType = "JPG"
+	IMAGE_PNG         ImageType = "PNG"
+	IMAGE_GIF         ImageType = "GIF"
+	HTTP_ADDRESS                = "0.0.0.0:9000"
+	HTTP_LENGTH_LIMIT           = 16 * 1024 * 1024 // 16mb
+	MODEL_TRESHOLD              = 0.7
+	MODEL_SIZE                  = 224
 )
 
 type ClassifyResults struct {
@@ -87,6 +88,11 @@ func StartupHTTP(stop context.Context, await *sync.WaitGroup) {
 			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 			return
 		}
+		if r.ContentLength > HTTP_LENGTH_LIMIT {
+			http.Error(w, "Content Too Large", http.StatusRequestEntityTooLarge)
+			return
+		}
+		r.Body = http.MaxBytesReader(w, r.Body, HTTP_LENGTH_LIMIT)
 
 		var d []byte
 		if raw, err := io.ReadAll(r.Body); err != nil {
