@@ -225,7 +225,7 @@ func StartupHTTP(stop context.Context, await *sync.WaitGroup) {
 
 		// Other Methods
 		case http.MethodHead, http.MethodGet:
-			http.Error(w, "service-nsfw ; ><> .o( blub blub )", http.StatusOK)
+			http.Error(w, "nsfw-service ; ><> .o( blub blub )", http.StatusOK)
 
 		default:
 			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
