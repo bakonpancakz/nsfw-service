@@ -221,7 +221,7 @@ func StartupHTTP(stop context.Context, await *sync.WaitGroup) {
 
 			w.Header().Set("Content-Type", "application/json; charset=utf-8")
 			w.Write(output)
-			os.Stdout.Write(output)
+			fmt.Fprintf(os.Stdout, "%s\n", output)
 
 		// Other Methods
 		case http.MethodHead, http.MethodGet:
