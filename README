@@ -44,15 +44,6 @@ Animated images are not supported. For GIFs, only the first frame is used.
    }
 }
 
-[ Hosting ]
-
-This service is intended to run in a Docker container on Debian 13.
-
-A public instance is available at: https://nsfw.panca.kz
-
-Please do not abuse it. Uptime is best-effort only. If this service is mission
-critical, you should host your own instance.
-
 [ Credits ]
 
 Uses the following AI model: https://github.com/GantMan/nsfw_model
