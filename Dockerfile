@@ -7,7 +7,11 @@ RUN apt-get update
 RUN apt-get install -y gcc wget tar
 RUN rm -rf /var/lib/apt/lists/*
 
-RUN wget -O tensorflow.tar.gz -q https://storage.googleapis.com/tensorflow/versions/2.18.0/libtensorflow-cpu-linux-x86_64.tar.gz && \
+# Using the GPU version although this is the CPU Dockerfile as it uses AVX2 extensions.
+# If your machine doesn't support these use this archive URL instead:
+# https://storage.googleapis.com/tensorflow/versions/2.18.0/libtensorflow-cpu-linux-x86_64.tar.gz
+
+RUN wget -O tensorflow.tar.gz -q https://storage.googleapis.com/tensorflow/versions/2.18.0/libtensorflow-gpu-linux-x86_64.tar.gz && \
     tar -C /usr/local -xzf tensorflow.tar.gz && \
     rm tensorflow.tar.gz
 
